@@ -215,6 +215,34 @@ def build_scenario_candles(start_price: float, target_price: float, sessions: in
     return pd.DataFrame({"Date": dates, "Open": opens, "High": highs, "Low": lows, "Close": closes})
 
 
+def build_simulated_option_chain(spot_price: float, n_strikes: int = 31) -> pd.DataFrame:
+    """Generate synthetic call option chain for demo when live data is sparse."""
+    half = n_strikes // 2
+    step = max(1.0, round(spot_price * 0.01))
+    base = round(spot_price / step) * step
+    strikes = np.array([base + (i - half) * step for i in range(n_strikes)], dtype=float)
+    strikes = np.clip(strikes, 0.01, None)
+    moneyness = (strikes - spot_price) / max(spot_price, 1e-6)
+
+    # Smooth synthetic bid/ask curve around spot for presentation.
+    mid = 2.8 * np.exp(-np.abs(moneyness) * 6.0) + np.maximum(0, (spot_price - strikes) * 0.14)
+    spread = 0.08 + 0.18 * np.abs(moneyness)
+    bid = np.maximum(0.01, mid - spread / 2)
+    ask = np.maximum(bid + 0.01, mid + spread / 2)
+    volume = np.maximum(1, (450 * np.exp(-np.abs(moneyness) * 4.5)).astype(int))
+    iv = 0.18 + 0.35 * np.abs(moneyness)
+
+    return pd.DataFrame(
+        {
+            "strike": strikes.round(2),
+            "bid": bid.round(2),
+            "ask": ask.round(2),
+            "volume": volume,
+            "impliedVolatility": iv.round(4),
+        }
+    )
+
+
 def find_break_evens(prices: np.ndarray, pnl: np.ndarray) -> list[float]:
     """Find break-even points using interpolation around zero-crossings."""
     break_evens: list[float] = []
@@ -276,16 +304,43 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     selected_expiry = st.selectbox("Ngày đáo hạn", expirations, index=0)
+    use_simulated_data = st.checkbox(
+        "Dùng dữ liệu mô phỏng (Option Chain)",
+        value=False,
+        help="Bật khi dữ liệu thật quá thưa, nhiều giá 0 hoặc cần trình chiếu minh họa.",
+    )
 
 with st.spinner("Đang tải chuỗi quyền chọn..."):
     calls_df, chain_error = load_option_chain(ticker, selected_expiry)
 if chain_error or calls_df is None:
-    st.error(chain_error or "Không tải được chuỗi quyền chọn.")
-    st.stop()
+    if use_simulated_data:
+        calls_df = build_simulated_option_chain(spot_price)
+        st.info("Đang dùng Option Chain mô phỏng do dữ liệu thực không sẵn sàng.")
+    else:
+        st.error(chain_error or "Không tải được chuỗi quyền chọn.")
+        st.stop()
+
+if calls_df is not None:
+    required_cols = {"strike", "bid", "ask", "volume", "impliedVolatility"}
+    missing_cols = required_cols.difference(set(calls_df.columns))
+    if missing_cols:
+        if use_simulated_data:
+            calls_df = build_simulated_option_chain(spot_price)
+            st.info("Option Chain thực thiếu cột cần thiết, đã chuyển sang dữ liệu mô phỏng.")
+        else:
+            st.error(f"Dữ liệu Option Chain thiếu cột: {', '.join(sorted(missing_cols))}.")
+            st.stop()
 
 calls_df = calls_df.dropna(subset=["strike"]).copy()
 calls_df["strike"] = calls_df["strike"].astype(float)
 calls_df = calls_df.sort_values("strike")
+
+# Auto fallback: if chain has mostly zero quotes, simulated data is clearer for demos.
+valid_quote_ratio = float(((calls_df["ask"] > 0) | (calls_df["bid"] > 0)).mean()) if len(calls_df) else 0.0
+if (not use_simulated_data) and valid_quote_ratio < 0.25:
+    calls_df = build_simulated_option_chain(spot_price)
+    st.warning("Option Chain thực có thanh khoản thấp (nhiều giá 0). App tự chuyển sang dữ liệu mô phỏng để trực quan hơn.")
+
 available_strikes = calls_df["strike"].tolist()
 
 if len(available_strikes) < 3:
