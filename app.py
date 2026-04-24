@@ -19,6 +19,18 @@ def apply_dark_theme() -> None:
                 background-color: #111827;
                 border-right: 1px solid #1F2937;
             }
+            [data-testid="stSidebar"] label,
+            [data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+            [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+            [data-testid="stSidebar"] h1,
+            [data-testid="stSidebar"] h2,
+            [data-testid="stSidebar"] h3,
+            [data-testid="stSidebar"] h4,
+            [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+            [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+            [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] strong {
+                color: #FFFFFF !important;
+            }
             .hero {
                 border: 1px solid #334155;
                 border-radius: 12px;
@@ -46,6 +58,12 @@ def apply_dark_theme() -> None:
                 font-size: 1.7rem;
                 font-weight: 700;
             }
+            [data-testid="stMetricLabel"],
+            [data-testid="stMetricLabel"] p,
+            [data-testid="stMetricValue"] {
+                color: #FFFFFF !important;
+            }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -129,8 +147,8 @@ def binomial_tree_price(s: float, k: float, t_years: float, r: float, sigma: flo
 
 apply_dark_theme()
 st.markdown('<div class="hero">Bang mo phong do Nhom 5 thuc hien</div>', unsafe_allow_html=True)
-st.title("Mo hinh dinh gia quyen chon Black-Scholes-Merton (BSM)")
-
+st.title("Nhóm 5: Hội Những Người Cợt Nhả")
+st.header("Mo hinh dinh gia quyen chon Black-Scholes-Merton (BSM)")
 
 with st.sidebar:
     st.header("THAM SO MO HINH BSM")
@@ -357,6 +375,10 @@ def apply_dark_theme() -> None:
             [data-testid="stSidebar"] {
                 background-color: #111827;
                 border-right: 1px solid #1F2937;
+            }
+            [data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+            [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+                color: #FFFFFF !important;
             }
             .stTabs [data-baseweb="tab-list"] {
                 gap: 1rem;
@@ -1275,7 +1297,6 @@ def build_crr_tree_figure(stock_tree: np.ndarray, option_tree: np.ndarray, steps
 
 
 st.divider()
-st.header("Brain nhóm - Mô hình Định giá Cây Nhị thức CRR")
 st.caption("Chế độ học thuật: mô phỏng thị trường và định giá quyền chọn bằng backward induction.")
 
 with st.sidebar:
