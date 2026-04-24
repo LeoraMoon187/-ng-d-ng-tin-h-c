@@ -1,8 +1,344 @@
 import numpy as np
+import plotly.graph_objects as go
+import streamlit as st
+from scipy.stats import norm
+
+
+st.set_page_config(page_title="BSM Option Pricing Lab", layout="wide")
+
+
+def apply_dark_theme() -> None:
+    st.markdown(
+        """
+        <style>
+            .stApp {
+                background-color: #0B1220;
+                color: #E5E7EB;
+            }
+            [data-testid="stSidebar"] {
+                background-color: #111827;
+                border-right: 1px solid #1F2937;
+            }
+            .hero {
+                border: 1px solid #334155;
+                border-radius: 12px;
+                background: linear-gradient(135deg, #111827 0%, #0F172A 60%, #0B1220 100%);
+                padding: 0.9rem 1rem;
+                margin-bottom: 0.8rem;
+                color: #F8FAFC;
+                font-weight: 600;
+                font-size: 1rem;
+            }
+            .premium-box {
+                border: 1px solid #334155;
+                border-radius: 12px;
+                background: #0F172A;
+                padding: 0.9rem 1rem;
+                margin-bottom: 0.75rem;
+            }
+            .premium-label {
+                color: #94A3B8;
+                font-size: 0.9rem;
+                margin-bottom: 0.2rem;
+            }
+            .premium-value {
+                color: #F8FAFC;
+                font-size: 1.7rem;
+                font-weight: 700;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def black_scholes_calc(
+    s: float, k: float, t_years: float, r: float, sigma: float, option_type: str
+) -> dict[str, float]:
+    """Calculate BSM price and core Greeks (Delta, Gamma)."""
+    t_eff = max(t_years, 1e-10)
+    sigma_eff = max(sigma, 1e-10)
+    d1 = (np.log(s / k) + (r + 0.5 * sigma_eff**2) * t_eff) / (sigma_eff * np.sqrt(t_eff))
+    d2 = d1 - sigma_eff * np.sqrt(t_eff)
+
+    nd1 = norm.cdf(d1)
+    nd2 = norm.cdf(d2)
+    pdf_d1 = norm.pdf(d1)
+
+    call_price = s * nd1 - k * np.exp(-r * t_eff) * nd2
+    put_price = k * np.exp(-r * t_eff) * norm.cdf(-d2) - s * norm.cdf(-d1)
+
+    if option_type == "Call":
+        price = call_price
+        delta = nd1
+    else:
+        price = put_price
+        delta = nd1 - 1
+
+    gamma = pdf_d1 / (s * sigma_eff * np.sqrt(t_eff))
+
+    return {
+        "d1": float(d1),
+        "d2": float(d2),
+        "Nd1": float(nd1),
+        "Nd2": float(nd2),
+        "call": float(call_price),
+        "put": float(put_price),
+        "price": float(price),
+        "delta": float(delta),
+        "gamma": float(gamma),
+    }
+
+
+def simulate_gbm_paths(
+    s0: float, t_years: float, r: float, sigma: float, n_steps: int = 120, n_paths: int = 10, seed: int = 42
+) -> tuple[np.ndarray, np.ndarray]:
+    """Simulate GBM price paths."""
+    np.random.seed(seed)
+    dt = t_years / n_steps
+    times = np.linspace(0, t_years, n_steps + 1)
+    paths = np.zeros((n_paths, n_steps + 1))
+    paths[:, 0] = s0
+    for i in range(1, n_steps + 1):
+        z = np.random.normal(size=n_paths)
+        paths[:, i] = paths[:, i - 1] * np.exp((r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * z)
+    return times, paths
+
+
+def binomial_tree_price(s: float, k: float, t_years: float, r: float, sigma: float, n: int, option_type: str) -> float:
+    """CRR binomial tree pricing (European) to compare with BSM."""
+    n_eff = max(1, int(n))
+    dt = t_years / n_eff
+    u = np.exp(sigma * np.sqrt(dt))
+    d = 1 / u
+    p = (np.exp(r * dt) - d) / (u - d)
+    p = min(max(float(p), 0.0), 1.0)
+    disc = np.exp(-r * dt)
+
+    stock = np.array([s * (u**j) * (d ** (n_eff - j)) for j in range(n_eff + 1)])
+    if option_type == "Call":
+        option_vals = np.maximum(stock - k, 0.0)
+    else:
+        option_vals = np.maximum(k - stock, 0.0)
+
+    for step in range(n_eff - 1, -1, -1):
+        option_vals = disc * (p * option_vals[1 : step + 2] + (1 - p) * option_vals[: step + 1])
+
+    return float(option_vals[0])
+
+
+apply_dark_theme()
+st.markdown('<div class="hero">Bang mo phong do Nhom 5 thuc hien</div>', unsafe_allow_html=True)
+st.title("Mo hinh dinh gia quyen chon Black-Scholes-Merton (BSM)")
+
+
+with st.sidebar:
+    st.header("THAM SO MO HINH BSM")
+    s = st.number_input("S - Gia hien tai", min_value=1.0, value=100.0, step=1.0)
+    k = st.number_input("K - Gia thuc thi", min_value=1.0, value=100.0, step=1.0)
+    t_days = st.number_input("T - Thoi gian dao han (Days)", min_value=1, value=30, step=1)
+    r = st.number_input("r - Lai suat phi rui ro", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
+    sigma = st.number_input("sigma - Bien dong (%)", min_value=1.0, max_value=300.0, value=20.0, step=1.0)
+    option_type = st.selectbox("Loai quyen chon", ["Call", "Put"])
+    seed = st.number_input("Seed mo phong thi truong", min_value=0, value=42, step=1)
+    st.markdown("---")
+    st.markdown("**San pham thuc hien boi Nhom 5**")
+
+t_years = float(t_days) / 365.0
+sigma_dec = float(sigma) / 100.0
+result = black_scholes_calc(s, k, t_years, r, sigma_dec, option_type)
+
+st.markdown(
+    f"""
+    <div class="premium-box">
+        <div class="premium-label">Gia quyen chon ly thuyet ({option_type})</div>
+        <div class="premium-value">${result["price"]:.4f}</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+tab_formula, tab_market, tab_greeks, tab_compare = st.tabs(
+    [
+        "GIAI MA CONG THUC",
+        "MO PHONG THI TRUONG & DUONG GIA",
+        "PHAN TICH DO NHAY",
+        "SO SANH & DANH GIA (Model Comparison)",
+    ]
+)
+
+with tab_formula:
+    st.subheader("Cong thuc BSM")
+    st.latex(r"d_1 = \frac{\ln(S/K) + (r + \sigma^2/2)T}{\sigma\sqrt{T}}")
+    st.latex(r"d_2 = d_1 - \sigma\sqrt{T}")
+    st.latex(r"Call = S \cdot N(d_1) - K \cdot e^{-rT} \cdot N(d_2)")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("d1", f'{result["d1"]:.4f}')
+    c2.metric("d2", f'{result["d2"]:.4f}')
+    c3.metric("N(d1)", f'{result["Nd1"]:.4f}')
+    c4.metric("N(d2)", f'{result["Nd2"]:.4f}')
+
+    st.markdown(
+        """
+- `d1`: muc do "thuan loi" cua co phieu sau khi dieu chinh theo bien dong.
+- `d2`: phien ban than trong hon cua `d1` khi tru hao hut do bien dong.
+- `N(d1)`: xac suat tich luy, dong thoi gan voi Delta cua Call.
+- `N(d2)`: xac suat trung hoa rui ro de option ket thuc trong tien.
+"""
+    )
+
+with tab_market:
+    st.subheader("10 duong gia gia lap bang Geometric Brownian Motion")
+    times, paths = simulate_gbm_paths(s, t_years, r, sigma_dec, n_steps=140, n_paths=10, seed=int(seed))
+    fig_market = go.Figure()
+    for i in range(paths.shape[0]):
+        fig_market.add_trace(
+            go.Scatter(
+                x=times * 365,
+                y=paths[i],
+                mode="lines",
+                line=dict(width=1.5),
+                name=f"Path {i+1}",
+                opacity=0.75,
+            )
+        )
+    fig_market.add_hline(y=k, line_dash="dash", line_color="#F59E0B", annotation_text="Strike K")
+    fig_market.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0B1220",
+        plot_bgcolor="#0B1220",
+        xaxis_title="Ngay toi dao han",
+        yaxis_title="Gia co phieu",
+        margin=dict(l=25, r=25, t=25, b=20),
+        height=470,
+    )
+    st.plotly_chart(fig_market, use_container_width=True)
+
+with tab_greeks:
+    st.subheader("Duong gia option theo gia co phieu va chi so Greek")
+    s_axis = np.linspace(max(1.0, 0.5 * k), 1.5 * k, 120)
+    prices_curve = []
+    delta_curve = []
+    gamma_curve = []
+    for s_i in s_axis:
+        res_i = black_scholes_calc(float(s_i), k, t_years, r, sigma_dec, option_type)
+        prices_curve.append(res_i["price"])
+        delta_curve.append(res_i["delta"])
+        gamma_curve.append(res_i["gamma"])
+
+    fig_price = go.Figure()
+    fig_price.add_trace(
+        go.Scatter(x=s_axis, y=prices_curve, mode="lines", line=dict(color="#22D3EE", width=3), name="Gia option")
+    )
+    intrinsic = np.maximum(s_axis - k, 0) if option_type == "Call" else np.maximum(k - s_axis, 0)
+    fig_price.add_trace(
+        go.Scatter(
+            x=s_axis,
+            y=intrinsic,
+            mode="lines",
+            line=dict(color="#94A3B8", width=2, dash="dash"),
+            name="Gia tri noi tai",
+        )
+    )
+    fig_price.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0B1220",
+        plot_bgcolor="#0B1220",
+        xaxis_title="Gia co phieu S",
+        yaxis_title=f"Gia {option_type}",
+        margin=dict(l=25, r=25, t=20, b=20),
+        height=430,
+    )
+    st.plotly_chart(fig_price, use_container_width=True)
+
+    g1, g2 = st.columns(2)
+    g1.metric("Delta (hien tai)", f'{result["delta"]:.5f}')
+    g2.metric("Gamma (hien tai)", f'{result["gamma"]:.5f}')
+
+with tab_compare:
+    st.markdown("### Thuong hieu hoc thuat: **Nhom 5 thuc hien**")
+    st.subheader("So sanh ket qua BSM va Binomial Tree")
+    n_current = st.slider("So buoc cay nhi thuc hien tai (n)", min_value=1, max_value=500, value=100, step=1)
+    bino_current = binomial_tree_price(s, k, t_years, r, sigma_dec, n_current, option_type)
+
+    col_bsm, col_bino = st.columns(2)
+    with col_bsm:
+        st.markdown("#### Bang gia tri mo hinh BSM")
+        st.dataframe(
+            {
+                "Chi tieu": ["Gia Option", "d1", "d2", "Delta", "Gamma"],
+                "Gia tri": [
+                    f'{result["price"]:.6f}',
+                    f'{result["d1"]:.6f}',
+                    f'{result["d2"]:.6f}',
+                    f'{result["delta"]:.6f}',
+                    f'{result["gamma"]:.6f}',
+                ],
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
+    with col_bino:
+        st.markdown("#### Bang gia tri mo hinh Binomial Tree (CRR)")
+        st.dataframe(
+            {
+                "Chi tieu": ["Gia Option", "n (so buoc)", "Sai lech voi BSM"],
+                "Gia tri": [
+                    f"{bino_current:.6f}",
+                    str(n_current),
+                    f"{abs(bino_current - result['price']):.6f}",
+                ],
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    n_values = np.arange(10, 501, 10)
+    bino_values = [binomial_tree_price(s, k, t_years, r, sigma_dec, int(nv), option_type) for nv in n_values]
+    bsm_level = np.full_like(n_values, result["price"], dtype=float)
+
+    fig_conv = go.Figure()
+    fig_conv.add_trace(
+        go.Scatter(
+            x=n_values,
+            y=bsm_level,
+            mode="lines",
+            line=dict(color="#EF4444", width=2),
+            name="Gia BSM (moc chuan)",
+        )
+    )
+    fig_conv.add_trace(
+        go.Scatter(
+            x=n_values,
+            y=bino_values,
+            mode="lines+markers",
+            line=dict(color="#22D3EE", width=2, dash="dash"),
+            marker=dict(size=4),
+            name="Gia Binomial Tree",
+        )
+    )
+    fig_conv.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0B1220",
+        plot_bgcolor="#0B1220",
+        xaxis_title="So buoc cay (n)",
+        yaxis_title="Gia tri quyen chon",
+        margin=dict(l=25, r=25, t=20, b=20),
+        height=420,
+    )
+    st.plotly_chart(fig_conv, use_container_width=True)
+
+    st.info(
+        "Khi so buoc (n) cua Cay nhi thuc cang lon, gia tri dinh gia se cang tien sat ve ket qua cua mo hinh "
+        "Black-Scholes. Dieu nay minh chung cho su thong nhat ve mat toan hoc giua hai mo hinh."
+    )
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
+import networkx as nx
 from plotly.subplots import make_subplots
 
 
@@ -821,3 +1157,223 @@ with tab_payoff:
         showlegend=False,
     )
     st.plotly_chart(key_fig, use_container_width=True)
+
+
+# =========================
+# Brain nhóm: CRR Module
+# =========================
+def crr_intrinsic(stock_price: float, strike: float, option_type: str) -> float:
+    if option_type == "Call":
+        return max(stock_price - strike, 0.0)
+    return max(strike - stock_price, 0.0)
+
+
+def binomial_tree_pricing(
+    s0: float,
+    strike: float,
+    maturity: float,
+    rate: float,
+    sigma: float,
+    steps: int,
+    option_type: str,
+    option_style: str,
+) -> tuple[float, np.ndarray, np.ndarray, float, float, float, float]:
+    """CRR binomial pricing using backward induction."""
+    dt = maturity / steps
+    u = float(np.exp(sigma * np.sqrt(dt)))
+    d = 1.0 / u
+    growth = float(np.exp(rate * dt))
+    p = (growth - d) / (u - d)
+    disc = float(np.exp(-rate * dt))
+
+    stock_tree = np.full((steps + 1, steps + 1), np.nan)
+    option_tree = np.full((steps + 1, steps + 1), np.nan)
+
+    for i in range(steps + 1):
+        for j in range(i + 1):
+            stock_tree[i, j] = s0 * (u ** j) * (d ** (i - j))
+
+    for j in range(steps + 1):
+        option_tree[steps, j] = crr_intrinsic(stock_tree[steps, j], strike, option_type)
+
+    for i in range(steps - 1, -1, -1):
+        for j in range(i + 1):
+            continuation = disc * (p * option_tree[i + 1, j + 1] + (1 - p) * option_tree[i + 1, j])
+            if option_style == "American":
+                exercise = crr_intrinsic(stock_tree[i, j], strike, option_type)
+                option_tree[i, j] = max(continuation, exercise)
+            else:
+                option_tree[i, j] = continuation
+
+    return float(option_tree[0, 0]), stock_tree, option_tree, dt, u, d, p
+
+
+def build_crr_tree_figure(stock_tree: np.ndarray, option_tree: np.ndarray, steps: int) -> go.Figure:
+    """Visualize binomial stock/option lattice with labels."""
+    graph = nx.DiGraph()
+    x_edges, y_edges = [], []
+    node_x, node_y, node_text, node_color = [], [], [], []
+
+    for i in range(steps + 1):
+        for j in range(i + 1):
+            graph.add_node((i, j))
+            x = float(i)
+            y = float(stock_tree[i, j])
+            node_x.append(x)
+            node_y.append(y)
+            node_text.append(f"S={stock_tree[i, j]:.2f}<br>v={option_tree[i, j]:.2f}")
+            if i == 0:
+                node_color.append("#22C55E")
+            elif i == steps:
+                node_color.append("#EF4444")
+            else:
+                node_color.append("#F59E0B")
+
+            if i < steps:
+                for nxt in [(i + 1, j), (i + 1, j + 1)]:
+                    graph.add_edge((i, j), nxt)
+                    x_edges.extend([x, float(nxt[0]), None])
+                    y_edges.extend([y, float(stock_tree[nxt[0], nxt[1]]), None])
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_edges,
+            y=y_edges,
+            mode="lines",
+            line=dict(color="rgba(148,163,184,0.5)", width=1.5),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers+text",
+            marker=dict(size=22, color=node_color, line=dict(color="#E5E7EB", width=1)),
+            text=node_text,
+            textposition="top center",
+            textfont=dict(size=10, color="#E5E7EB"),
+            hovertemplate="%{text}<extra></extra>",
+            name="Nodes",
+        )
+    )
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0B1220",
+        plot_bgcolor="#0B1220",
+        xaxis_title="Bước thời gian (Step)",
+        yaxis_title="Giá cổ phiếu",
+        margin=dict(l=25, r=25, t=30, b=25),
+        showlegend=False,
+        height=560,
+    )
+    fig.update_xaxes(dtick=1, showgrid=True, gridcolor="rgba(148,163,184,0.18)")
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.18)")
+    return fig
+
+
+st.divider()
+st.header("Brain nhóm - Mô hình Định giá Cây Nhị thức CRR")
+st.caption("Chế độ học thuật: mô phỏng thị trường và định giá quyền chọn bằng backward induction.")
+
+with st.sidebar:
+    st.markdown("---")
+    st.subheader("Tham số CRR (Brain nhóm)")
+    crr_s = st.number_input("S - Giá cổ phiếu hiện tại", min_value=1.0, value=100.0, step=1.0, key="crr_s")
+    crr_k = st.number_input("K - Giá thực thi", min_value=1.0, value=100.0, step=1.0, key="crr_k")
+    crr_t = st.number_input("T - Thời gian đáo hạn (năm)", min_value=0.01, value=1.0, step=0.1, key="crr_t")
+    crr_r = st.number_input("r - Lãi suất phi rủi ro", min_value=0.0, max_value=1.0, value=0.05, step=0.01, key="crr_r")
+    crr_sigma = st.number_input("sigma - Độ biến động", min_value=0.01, max_value=2.0, value=0.2, step=0.01, key="crr_sigma")
+    crr_n = st.slider("n - Số bước cây", min_value=1, max_value=5, value=3, step=1, key="crr_n")
+    crr_type = st.selectbox("Loại quyền chọn", ["Call", "Put"], key="crr_type")
+    crr_style = st.selectbox("Kiểu quyền chọn", ["European", "American"], key="crr_style")
+    crr_seed = st.number_input("Seed mô phỏng thị trường", min_value=0, value=42, step=1, key="crr_seed")
+
+try:
+    crr_price, crr_stock_tree, crr_opt_tree, crr_dt, crr_u, crr_d, crr_p = binomial_tree_pricing(
+        crr_s, crr_k, crr_t, crr_r, crr_sigma, int(crr_n), crr_type, crr_style
+    )
+except Exception as exc:
+    st.error(f"Lỗi tính toán CRR: {exc}")
+    st.stop()
+
+crr_tab1, crr_tab2, crr_tab3, crr_tab4 = st.tabs(
+    ["Lý thuyết CRR", "Mô phỏng Thị trường", "Trực quan hóa Cây Nhị thức", "Động cơ Định giá"]
+)
+
+with crr_tab1:
+    st.subheader("Công thức nền tảng CRR")
+    st.latex(r"\Delta t = \frac{T}{n}")
+    st.latex(r"u = e^{\sigma\sqrt{\Delta t}}, \quad d = \frac{1}{u}")
+    st.latex(r"p = \frac{e^{r\Delta t} - d}{u - d}")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Delta t", f"{crr_dt:.4f}")
+    c2.metric("u (Bước tăng)", f"{crr_u:.4f}")
+    c3.metric("d (Bước giảm)", f"{crr_d:.4f}")
+    c4.metric("p (Xác suất tăng)", f"{crr_p:.4f}")
+    if not (0 <= crr_p <= 1):
+        st.warning("Xác suất trung hòa rủi ro p nằm ngoài [0,1]. Hãy điều chỉnh n/r/sigma để mô hình hợp lệ hơn.")
+
+with crr_tab2:
+    st.subheader("Random Walk / GBM minh họa chuyển động thị trường")
+    np.random.seed(int(crr_seed))
+    points = 160
+    dt_sim = crr_t / points
+    shocks = np.random.normal(0, np.sqrt(dt_sim), points)
+    prices = [crr_s]
+    for z in shocks:
+        next_price = prices[-1] * np.exp((crr_r - 0.5 * crr_sigma**2) * dt_sim + crr_sigma * z)
+        prices.append(float(next_price))
+    t_axis = np.linspace(0, crr_t, len(prices))
+    sim_fig = go.Figure()
+    sim_fig.add_trace(
+        go.Scatter(
+            x=t_axis,
+            y=prices,
+            mode="lines",
+            line=dict(color="#22D3EE", width=2),
+            name="Giá mô phỏng",
+        )
+    )
+    sim_fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0B1220",
+        plot_bgcolor="#0B1220",
+        xaxis_title="Thời gian (năm)",
+        yaxis_title="Giá cổ phiếu",
+        margin=dict(l=25, r=25, t=25, b=20),
+        height=420,
+    )
+    st.plotly_chart(sim_fig, use_container_width=True)
+
+with crr_tab3:
+    st.subheader("Lattice Graph: mỗi node hiển thị S và v")
+    tree_fig = build_crr_tree_figure(crr_stock_tree, crr_opt_tree, int(crr_n))
+    st.plotly_chart(tree_fig, use_container_width=True)
+
+with crr_tab4:
+    st.subheader("Hàm định giá bằng Backward Induction")
+    st.code(
+        """def binomial_tree_pricing(S, K, T, r, sigma, n, option_type, option_style):
+    dt = T / n
+    u = exp(sigma * sqrt(dt))
+    d = 1 / u
+    p = (exp(r * dt) - d) / (u - d)
+    disc = exp(-r * dt)
+    # 1) payoff tại đáo hạn
+    # 2) lùi từng bước: v = disc * (p * v_up + (1-p) * v_down)
+    # 3) nếu American: v = max(v, intrinsic)
+    return v0""",
+        language="python",
+    )
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">Giá trị quyền chọn lý thuyết hôm nay</div>
+            <div class="metric-value">{crr_price:.4f}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
