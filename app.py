@@ -231,7 +231,7 @@ with tab_market:
         margin=dict(l=25, r=25, t=25, b=20),
         height=470,
     )
-    st.plotly_chart(fig_market, use_container_width=True)
+    st.plotly_chart(fig_market, width="stretch")
 
 with tab_greeks:
     st.subheader("Duong gia option theo gia co phieu va chi so Greek")
@@ -268,7 +268,7 @@ with tab_greeks:
         margin=dict(l=25, r=25, t=20, b=20),
         height=430,
     )
-    st.plotly_chart(fig_price, use_container_width=True)
+    st.plotly_chart(fig_price, width="stretch")
 
     g1, g2 = st.columns(2)
     g1.metric("Delta (hien tai)", f'{result["delta"]:.5f}')
@@ -294,7 +294,7 @@ with tab_compare:
                     f'{result["gamma"]:.6f}',
                 ],
             },
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     with col_bino:
@@ -308,7 +308,7 @@ with tab_compare:
                     f"{abs(bino_current - result['price']):.6f}",
                 ],
             },
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -345,7 +345,7 @@ with tab_compare:
         margin=dict(l=25, r=25, t=20, b=20),
         height=420,
     )
-    st.plotly_chart(fig_conv, use_container_width=True)
+    st.plotly_chart(fig_conv, width="stretch")
 
     st.info(
         "Khi so buoc (n) cua Cay nhi thuc cang lon, gia tri dinh gia se cang tien sat ve ket qua cua mo hinh "
@@ -879,7 +879,7 @@ with tab_tech:
         )
         tech_fig.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.15)")
         tech_fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.15)")
-        st.plotly_chart(tech_fig, use_container_width=True)
+        st.plotly_chart(tech_fig, width="stretch")
 
 with tab_chain:
     st.subheader(f"Bảng quyền chọn Call - {ticker} | Đáo hạn: {selected_expiry}")
@@ -911,7 +911,7 @@ with tab_chain:
     with left_col:
         st.dataframe(
             display_df.style.apply(highlight_selected, axis=1).apply(color_bid_ask, axis=0),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     with right_col:
@@ -937,7 +937,7 @@ with tab_chain:
                     "Premium": [leg1_premium, leg2_premium, leg3_premium],
                 }
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     st.caption("Phong cách terminal: Bid xanh, Ask đỏ, và phiếu lệnh nổi bật để thao tác nhanh.")
@@ -1059,7 +1059,7 @@ with tab_payoff:
     )
     payoff_fig.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.15)")
     payoff_fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.15)")
-    st.plotly_chart(payoff_fig, use_container_width=True)
+    st.plotly_chart(payoff_fig, width="stretch")
 
     be_text = ", ".join(f"{x:.2f}" for x in break_evens) if break_evens else "Không có"
     col1, col2, col3 = st.columns(3)
@@ -1102,7 +1102,7 @@ with tab_payoff:
     )
     st.dataframe(
         scenario_df.style.format({"Biến động (%)": "{:+.2f}", "Giá mục tiêu": "{:.2f}", "PnL ước tính": "{:.2f}"}),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -1130,7 +1130,7 @@ with tab_payoff:
         margin=dict(l=25, r=25, t=20, b=20),
         height=420,
     )
-    st.plotly_chart(scenario_fig, use_container_width=True)
+    st.plotly_chart(scenario_fig, width="stretch")
 
     # Extra visual: PnL bar chart at key price levels.
     key_prices = [
@@ -1178,7 +1178,7 @@ with tab_payoff:
         margin=dict(l=25, r=25, t=20, b=20),
         showlegend=False,
     )
-    st.plotly_chart(key_fig, use_container_width=True)
+    st.plotly_chart(key_fig, width="stretch")
 
 
 # =========================
@@ -1367,12 +1367,12 @@ with crr_tab2:
         margin=dict(l=25, r=25, t=25, b=20),
         height=420,
     )
-    st.plotly_chart(sim_fig, use_container_width=True)
+    st.plotly_chart(sim_fig, width="stretch")
 
 with crr_tab3:
     st.subheader("Lattice Graph: mỗi node hiển thị S và v")
     tree_fig = build_crr_tree_figure(crr_stock_tree, crr_opt_tree, int(crr_n))
-    st.plotly_chart(tree_fig, use_container_width=True)
+    st.plotly_chart(tree_fig, width="stretch")
 
 with crr_tab4:
     st.subheader("Hàm định giá bằng Backward Induction")
