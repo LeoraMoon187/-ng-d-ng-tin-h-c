@@ -472,7 +472,7 @@ def format_backtest_report(result_dict: dict) -> str:
         f"Giá thực hiện đề xuất K             : {float(result_dict['k']):,.4f}",
         "-" * 78,
         f"Historical Volatility sigma         : {float(result_dict['sigma_hist']):.4%}",
-        f"Lãi suất phi rủi ro r               : {float(result_dict['r']):.4%} ({result_dict['rate_source']})",
+        f"Lãi suất phi rủi ro r               : {float(result_dict['r']) * 100:.8f}% ({result_dict['rate_source']})",
         f"d1                                  : {float(result_dict['d1']):.6f}",
         f"d2                                  : {float(result_dict['d2']):.6f}",
         "-" * 78,
